@@ -1,0 +1,16 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "g++.exe build active file",
+        "type": "shell",
+        "command": "g++",
+        "args": [ "-o", "lab5.exe", "mainlab5.cpp","framebuffer.cpp", "polymesh.cpp","sphere.cpp","phong.cpp","directional_light.cpp","point_light.cpp","scene.cpp","nanoflann-master\\include\\nanoflann.hpp","-lm"] /*[ "-o", "lab4.exe", "main_lab4.cpp","framebuffer.cpp", "polymesh.cpp","sphere.cpp","phong.cpp","directional_light.cpp","point_light.cpp","scene.cpp", "-lm"]*/,
+        "group": {
+          "kind": "build",
+          "isDefault": true
+        }
+      }
+    ]
+  }
+  //g++ -o lab2executable main_lab2.cpp framebuffer.cpp linedrawer.cpp polymesh.cpp -lm
