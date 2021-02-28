@@ -19,6 +19,8 @@ public:
 	float index_refrac;
 	Colour diffuse_photon;
 	Colour specular_photon;
+	Colour diffuse;
+	Colour specular;
 	
 	virtual void compute_base_colour(Colour &result)
 	{

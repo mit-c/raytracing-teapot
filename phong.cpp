@@ -57,8 +57,9 @@ void Phong::compute_light_colour(Vector &viewer, Vector &normal1, Vector &ldir, 
 	// the specular component
 	
 	Vector r;
-	tolight.negate(); // i added this
-	normal.reflection(tolight, r); // tolight should be lighttoobject
+	r = viewer - 2.0f*(normal.dot(viewer))*normal;
+	//tolight.negate(); // i added this
+	//normal.reflection(tolight, r); // tolight should be lighttoobject
 	r.normalise();
 
 	float h;
@@ -74,8 +75,8 @@ void Phong::compute_light_colour(Vector &viewer, Vector &normal1, Vector &ldir, 
 		result.b += specular.b * p;
 	}
 
-	result.r = result.r / 2.0f;
-	result.g = result.g/2.0f;
-	result.b = result.b/2.0f;
+	result.r = 0.5*result.r;
+	result.g = 0.5*result.g;
+	result.b = 0.5*result.b;
 }
 

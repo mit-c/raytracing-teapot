@@ -16,15 +16,19 @@
 
 using namespace std;
 
-PolyMesh::PolyMesh(char *file)
+PolyMesh::PolyMesh(char *file, bool interpolate_on, bool flip)
 {
+  interpolate = interpolate_on;
+  flip_normals = flip;
   Transform *transform = new Transform();
 
   this->do_construct(file, transform);
 }
 
-PolyMesh::PolyMesh(char *file, Transform *transform)
+PolyMesh::PolyMesh(char *file, Transform *transform, bool interpolate_on, bool flip)
 {
+  interpolate = interpolate_on;
+  flip_normals = flip;
   this->do_construct(file, transform);
 }
 
@@ -124,14 +128,14 @@ void PolyMesh::do_construct(char *file, Transform *transform)
 
     vertex_iss.clear();
     vertex_iss.str(line);
-
     vertex_iss >> vertex[i].x >> vertex[i].y >>vertex[i].z;
 
+    
     vertex[i].w = 1.0f;
 
     transform->apply(vertex[i]);
   }
-
+  
   for (i = 0; i < triangle_count; i += 1)
   {
     try {
@@ -146,13 +150,11 @@ void PolyMesh::do_construct(char *file, Transform *transform)
     triangle_iss.str(line);
     
     triangle_iss >> count >> triangle[i][0] >> triangle[i][1] >> triangle[i][2];
-    /*    triangle[i][0] -= 1;
-    triangle[i][1] -= 1;
-    triangle[i][2] -= 1;*/
+   
 
     if (count != 3)
     {
-      cerr << "Problem reading meshfile (non-triangle present)." << endl;
+      cerr << "Problem reading meshfile (non-triangle present)." << line << endl;
       exit(-1);
     }
 
@@ -262,6 +264,7 @@ void PolyMesh::compute_face_normal(int which_triangle, Vector &normal)
 
   v0v1.cross(v0v2, normal);
   normal.normalise();
+  
 }
 
 void PolyMesh::triangle_intersection(Ray ray, Hit &hit, int which_triangle)
@@ -275,6 +278,8 @@ void PolyMesh::triangle_intersection(Ray ray, Hit &hit, int which_triangle)
     // ray is parallel to triangle so does not intersect
     return;
   }
+  
+
 
   Vector v0,v1,v2;
   v0.x = vertex[triangle[which_triangle][0]].x;
@@ -308,6 +313,8 @@ void PolyMesh::triangle_intersection(Ray ray, Hit &hit, int which_triangle)
     return;
   }
 
+  
+
   Vertex p;
 
   p.x = ray.position.x + t * ray.direction.x;
@@ -318,7 +325,19 @@ void PolyMesh::triangle_intersection(Ray ray, Hit &hit, int which_triangle)
   hit.what = this;
   hit.position = p;
 
+  if(interpolate == false)
+  {
+    hit.normal = face_normal[which_triangle];
+    hit.normal.normalise();
+    if(flip_normals)
+    { 
+      hit.normal.negate();
+    }
+    return;
+  } 
+
   // interpolating normals
+
   int index0,index1,index2;
   Vector v0_normal,v1_normal,v2_normal,edge0,edge1,edge2;
   index0 = triangle[which_triangle][0];
@@ -334,9 +353,17 @@ void PolyMesh::triangle_intersection(Ray ray, Hit &hit, int which_triangle)
   Vector interpolated_normal = (1.0f-u-v)*v0_normal + u*v1_normal + v*v2_normal;
 
   hit.normal = interpolated_normal;
- // hit.normal = face_normal[which_triangle];
+  
+ 
+  // 
 
   hit.normal.normalise();
+  if(flip_normals)
+  { 
+    hit.normal.negate();
+  }
+  
+  
 
   return;
 }
@@ -365,16 +392,5 @@ void PolyMesh::intersection(Ray ray, Hit &hit)
         hit = current_hit;
       }
     }
-  }
-
-  if (hit.flag == true)
-  {
-    /*
-    if(hit.normal.dot(ray.direction) > 0.0)
-    {
-      hit.normal.negate();
-    }
-    */
-    
   }
 }

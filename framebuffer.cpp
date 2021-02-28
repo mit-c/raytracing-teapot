@@ -12,6 +12,9 @@
 using namespace std;
 
 #include "framebuffer.h"
+#include "colour.h"
+#include <algorithm>
+#include <list>
 
 FrameBuffer::FrameBuffer(int w, int h)
 {
@@ -95,6 +98,71 @@ int FrameBuffer::getPixel(int x, int y, float &red, float &green, float &blue)
   return 0;
 }
 
+
+Colour FrameBuffer::getAverage(int x, int y, int window_size)
+{
+    // Given a valid x,y point in a framebuffer calculate average.
+    if(window_size % 2 == 0)
+    {
+      std::cout << "window size should be even" << endl;
+      return Colour();
+    }
+    // in case where window_size is 3
+    // first pixel to get is x - window_size / 2. Note 3/2 = 1 for int div
+   
+    
+    float r_sum=0;
+    float g_sum=0;
+    float b_sum=0;
+    float r,g,b;
+    int window_half = window_size/2;
+    
+    for(int i = x - window_half; i<x+window_half+1; i++)
+    {
+      for(int j = y - window_half; j<y+window_half+1; j++)
+      {
+        
+        this->getPixel(i,j,r,g,b);
+      
+        r_sum += r;
+        g_sum += g;
+        b_sum += b;
+      }
+    }
+    int n = window_size*window_size;
+    float r_out = std::min(r_sum/(float)n,10.0f);
+    float g_out = std::min(g_sum/(float)n,10.0f);
+    float b_out = std::min(b_sum/(float)n,10.0f);
+    
+    return Colour(r_out,g_out,b_out,0);
+
+}
+
+int FrameBuffer::antiAlias(FrameBuffer &fb_out, int window_size)
+{
+ // This function outputs an anti-aliased version of the local framebuffer.
+  int window_half = window_size/2; 
+  int x_start = window_half;
+  int y_start = x_start;
+  int x_end = width - window_half;
+  int y_end = height - window_half;
+  int x_pixel,y_pixel;
+  std::cout << "aliasing starts here:"  << endl;
+
+  for(int x =x_start;x<x_end;x++)
+  {
+    for(int y = y_start;y<y_end;y++)
+    {
+      Colour colour_aa = this->getAverage(x,y,window_size);
+      x_pixel = x - x_start;
+      y_pixel = y - y_start;
+      fb_out.plotPixel(x_pixel,y_pixel,colour_aa.r,colour_aa.g,colour_aa.b);
+
+    }
+  }
+  return 0;
+}
+
 int FrameBuffer::writeRGBFile(char *filename)
 {
   float min = 0.0f;
@@ -136,6 +204,8 @@ int FrameBuffer::writeRGBFile(char *filename)
   return 0;
 }
 
+
+
 int FrameBuffer::writeDepthFile(char *filename)
 {
   float max = 0;
@@ -170,6 +240,10 @@ int FrameBuffer::writeDepthFile(char *filename)
     outfile << pd << pd << pd;
   }
   
+
+
   outfile.close();
   return 0;
 }
+
+
