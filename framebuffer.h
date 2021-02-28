@@ -4,6 +4,8 @@
  *
  * Do what you like with this code as long as you retain this comment.
  */
+#include "colour.h"
+
 
 #ifndef _FRAMEBUFFER_H_
 #define _FRAMEBUFFER_H_
@@ -27,6 +29,8 @@ class FrameBuffer {
   int getDepth(int x, int y, float &depth);
   int writeRGBFile(char *filename);
   int writeDepthFile(char *filename);
+  Colour getAverage(int x, int y,int window);
+  int antiAlias(FrameBuffer &fb_out, int window_size);
 };
 
 #endif

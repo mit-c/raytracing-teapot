@@ -11,6 +11,7 @@
 #include "vertex.h"
 #include "global.h"
 #include <algorithm>
+#include <iostream>
 #include <complex>
 #include "photon.h"
 #include <cmath>
@@ -191,7 +192,7 @@ void Scene::raytrace(Ray ray, int level, Object *objects, Light *lights, Colour 
 		float kr = best_hit.what->material->reflect;
 		float kt = best_hit.what->material->refract;
 		
-		if(k<0.0f) // tir if material reflective
+		if(kr!=0) // tir if material reflective
 		{
 			kt = 0.0f; // no refraction only reflection
 			if(kr!=0.0f) // if material reflective make 100% reflective
@@ -203,8 +204,8 @@ void Scene::raytrace(Ray ray, int level, Object *objects, Light *lights, Colour 
 		{
 			if(kt!=0)
 			{
-				float r_par = (material_eta*costhetai-outside_eta*costhetat)/(material_eta*costhetai+outside_eta*costhetat); //eta2 = materialeta
-				float r_per = (outside_eta*costhetai-material_eta*costhetat)/(outside_eta*costhetai+material_eta*costhetat); 
+				float r_par = (outside_eta*costhetai-material_eta*costhetat)/(outside_eta*costhetai+material_eta*costhetat); //eta2 = materialeta
+				float r_per = (material_eta*costhetai-outside_eta*costhetat)/(material_eta*costhetai+outside_eta*costhetat); 
 				kr = 0.5f*(r_par*r_par+r_per*r_per);
 				kt = 1 - kr;
 			}
@@ -227,9 +228,9 @@ void Scene::raytrace(Ray ray, int level, Object *objects, Light *lights, Colour 
 
 			Vector R = I-2.0f*(N.dot(I))*N; 
 			R.normalise();
-			reflect_ray.position.x = best_hit.position.x + 0.0001f*N.x;
-			reflect_ray.position.y = best_hit.position.y + 0.0001f*N.y;
-			reflect_ray.position.z = best_hit.position.z + 0.0001f*N.z;
+			reflect_ray.position.x = best_hit.position.x + 0.0001f*best_hit.normal.x;
+			reflect_ray.position.y = best_hit.position.y + 0.0001f*best_hit.normal.y;
+			reflect_ray.position.z = best_hit.position.z + 0.0001f*best_hit.normal.z;
 
 			
 			
@@ -259,9 +260,9 @@ void Scene::raytrace(Ray ray, int level, Object *objects, Light *lights, Colour 
 			Ray refract_ray;
 			refract_ray.direction = T;
 			
-			refract_ray.position.x = best_hit.position.x + 0.001*T.x;
-			refract_ray.position.y = best_hit.position.y + 0.001*T.y;
-			refract_ray.position.z = best_hit.position.z + 0.001*T.z; 
+			refract_ray.position.x = best_hit.position.x - 0.0001*N.x;
+			refract_ray.position.y = best_hit.position.y - 0.0001*N.y;
+			refract_ray.position.z = best_hit.position.z - 0.0001*N.z; 
 			raytrace(refract_ray, level, objects, lights, refract_colour); // if we are inside object we might need to negate the normals
 			
 			refract_colour.r = kt*refract_colour.r;
@@ -291,12 +292,32 @@ void Scene::raytrace(Ray ray, int level, Object *objects, Light *lights, Colour 
 void Scene::hemisphere_diffuse(Vector normal, Vector &photon_direction) 
 {
     // generating hemisphere coordinates
+	float x,y,z;
+	x = -1 + static_cast <float> (rand()) /( static_cast <float> (RAND_MAX/(2))); // mults N_t
+    y = -1 + static_cast <float> (rand()) /( static_cast <float> (RAND_MAX/(2))); // mults normal
+    z = -1 + static_cast <float> (rand()) /( static_cast <float> (RAND_MAX/(2))); // mults N_b
+    y = abs(y); // we want hemisphere.
+	if(normal.z == 0 || normal.x == 0)
+	{
+		float sign = 0;
+		if(normal.y < 0)
+		{
+			sign = -1;
+		}
+		else
+		{
+			sign = 1;
+		}
+		photon_direction = Vector(x,sign*y,z);
+		photon_direction.normalise();
+		return;
+	}
 
-
-    float x,y,z;
+    
     Vector N_t = Vector(normal.z,0.0f,-normal.x); // normal.z = 0 normal.x = 0 normal.y = 1
     Vector N_b;
     normal.cross(N_t,N_b);
+
     N_t.normalise();
     N_b.normalise();
 	//std::cout << "normal in hemisphere" << normal.x << normal.y << normal.z << endl; 
@@ -304,14 +325,20 @@ void Scene::hemisphere_diffuse(Vector normal, Vector &photon_direction)
     y = -1 + static_cast <float> (rand()) /( static_cast <float> (RAND_MAX/(2))); // mults normal
     z = -1 + static_cast <float> (rand()) /( static_cast <float> (RAND_MAX/(2))); // mults N_b
     y = abs(y); // we want hemisphere.
-    photon_direction = x*N_t + y*normal + z*N_b;
+    photon_direction.x = x*N_t.x + y*normal.x + z*N_b.x;
+	photon_direction.y = x*N_t.y + y*normal.y + z*N_b.y;
+	photon_direction.z = x*N_t.z + y*normal.z + z*N_b.z;
     photon_direction.normalise();
+	if(isnan(photon_direction.x) || isnan(photon_direction.x) || isnan(photon_direction.z))
+	{
+		std::cout << "normals: "<< normal.x  << normal.y << normal.z << endl;
 
+	}
 }
 
-void Scene::emit_photon_caustic(Vertex light_location, int num_of_photons)
+void Scene::emit_photon_caustic(Vertex light_location, int num_of_photons, float power_ratio)
 {
-
+	std::cout << "power ratios is:" << power_ratio << endl;
     float x,y,z;
     for(int i=0;i<num_of_photons;i++)
     {	
@@ -322,13 +349,13 @@ void Scene::emit_photon_caustic(Vertex light_location, int num_of_photons)
 			
 		x = -1 + static_cast <float> (rand()) /( static_cast <float> (RAND_MAX/(2)));
 		y = -abs(-1 + static_cast <float> (rand()) /( static_cast <float> (RAND_MAX/(2)))); // emits light downwards
-		z = -1 + static_cast <float> (rand()) /( static_cast <float> (RAND_MAX/(2)));
-		int level = 6; // level is larger for caustic photons
+		z = (-1 + static_cast <float> (rand()) /( static_cast <float> (RAND_MAX/(2))));
+		int level = 10; // level is larger for caustic photons
 		Photon photon;
 		photon.photon_ray.position = light_location;
 		photon.photon_ray.direction = Vector(x,y,z);
 		photon.photon_ray.direction.normalise();
-		float photon_power =1.0f/450.0f; // in order to get good image you need to have enough power to show the weaker caustics then set a maximum intensity.
+		float photon_power =power_ratio/(2000.0f); // in order to get good image you need to have enough power to show the weaker caustics then set a maximum intensity.
 		photon.power = Colour(photon_power,photon_power,photon_power,0.0f);
 		int diffuse_level = 1;
 		int specular_level = 0;
@@ -354,13 +381,13 @@ void Scene::emit_photon_diffuse_point(Vertex light_location, int num_of_photons)
 		// emit in random direction but downwards.
 		x = -1 + static_cast <float> (rand()) /( static_cast <float> (RAND_MAX/(2)));
 		y = -abs(-1 + static_cast <float> (rand()) /( static_cast <float> (RAND_MAX/(2))));
-		z = -1 + static_cast <float> (rand()) /( static_cast <float> (RAND_MAX/(2)));
-		int level = 5;
+		z = (-1 + static_cast <float> (rand()) /( static_cast <float> (RAND_MAX/(2))));
+		int level = 10;
 		Photon photon;
 		photon.photon_ray.position = light_location;
 		photon.photon_ray.direction = Vector(x,y,z);
 		photon.photon_ray.direction.normalise();
-		float photon_power = 1.0f/450.0f;;//((float)num_of_photons*0.0005); // 200 = 20,000 / 100 = num_of_photons/ 100
+		float photon_power = 1.0f/(500.0f);//((float)num_of_photons*0.0005); // 200 = 20,000 / 100 = num_of_photons/ 100
 		photon.power = Colour(photon_power,photon_power,photon_power,0.0f); // light colour
 		int diffuse_level = 1000; // this parameter only affects our photon_trace when it is less than level.
 		// diffuse_level is designed to implement caustics.
@@ -377,7 +404,8 @@ void Scene::emit_photon_diffuse_point(Vertex light_location, int num_of_photons)
 
 void Scene::photon_trace(Photon photon, int level, int diffuse_level,int specular_level, bool caustic)
 {
-
+	
+	
 
     Ray ray = photon.photon_ray;
 	Hit hit;
@@ -399,6 +427,7 @@ void Scene::photon_trace(Photon photon, int level, int diffuse_level,int specula
 	}
 
 	
+	
     // Need to trace ray through scene
     // First need to find first primative
 	
@@ -412,7 +441,7 @@ void Scene::photon_trace(Photon photon, int level, int diffuse_level,int specula
 	
 	float outside_eta = 1.0f;
 	float NdotI = ray.direction.dot(hit.normal);
-
+	
     // We have closest hit now we need to figure out probabilities.
 	
     if(NdotI < 0) //makes sure normal is pointing correct direction.
@@ -434,8 +463,6 @@ void Scene::photon_trace(Photon photon, int level, int diffuse_level,int specula
 	//std::cout << hit.what->material->diffuse_photon.r << endl;
     
     Colour diffuse = hit.what->material->diffuse_photon;
-	
-	
     Colour specular = hit.what->material->specular_photon;
 
     float prob_reflect = max({diffuse.r + specular.r, diffuse.g + specular.g,diffuse.b + specular.b});
@@ -446,7 +473,7 @@ void Scene::photon_trace(Photon photon, int level, int diffuse_level,int specula
     float xi = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
 
 	
-    if(xi>=0 && xi<=prob_diffuse)
+    if(xi>=0 && xi<=prob_diffuse) 
     {
 		if(caustic && (specular_level==0)) // need to have at least one specular bounce.
 		{
@@ -467,16 +494,21 @@ void Scene::photon_trace(Photon photon, int level, int diffuse_level,int specula
         reflect_power.r = photon.power.r*LdotN*diffuse.r;
         reflect_power.g = photon.power.g*LdotN*diffuse.g;
         reflect_power.b = photon.power.b*LdotN*diffuse.b;
-		
+	
+		if(reflect_power.r + reflect_power.g + reflect_power.b < pow(10,-10))
+		{
+			return;
+		}
 
         Vector reflect_ray;
         hemisphere_diffuse(hit.normal, reflect_ray); // this function finds a new direction for the photon in a random direction which isn't into the surface.
 
         reflect_photon.photon_ray.direction = reflect_ray;
-        reflect_photon.photon_ray.position.x = hit.position.x + 0.0001*reflect_photon.photon_ray.direction.x;
-        reflect_photon.photon_ray.position.y = hit.position.y + 0.0001*reflect_photon.photon_ray.direction.y;
-        reflect_photon.photon_ray.position.z = hit.position.z + 0.0001*reflect_photon.photon_ray.direction.z;
+        reflect_photon.photon_ray.position.x = hit.position.x + 0.0001*hit.normal.x;
+        reflect_photon.photon_ray.position.y = hit.position.y + 0.0001*hit.normal.y;
+        reflect_photon.photon_ray.position.z = hit.position.z + 0.0001*hit.normal.z;
         reflect_photon.photon_ray.direction.normalise();
+
         reflect_photon.power = reflect_power; // update photon power.
 
 		//std::cout << reflect_ray.x << reflect_ray.y << reflect_ray.z << endl;
@@ -508,7 +540,14 @@ void Scene::photon_trace(Photon photon, int level, int diffuse_level,int specula
 		new_power.r = (photon.power.r*specular.r)/prob_specular;
 		new_power.g = (photon.power.g*specular.g)/prob_specular;
 		new_power.b = (photon.power.b*specular.b)/prob_specular;
-
+	
+		if(new_power.r + new_power.g + new_power.b < pow(10,-20))
+		{
+			return;
+		}
+	
+		// TODO: photon power is nan pls fix.
+		
 		if(k<0.0f) // tir if material reflective
 		{
 			kt = 0.0f; // no refraction only reflection
@@ -521,10 +560,10 @@ void Scene::photon_trace(Photon photon, int level, int diffuse_level,int specula
 		{
 			if(kt!=0)
 			{
-				float r_par = (material_eta*costhetai-outside_eta*costhetat)/(material_eta*costhetai+outside_eta*costhetat); //eta2 = materialeta
-				float r_per = (outside_eta*costhetai-material_eta*costhetat)/(outside_eta*costhetai+material_eta*costhetat); 
+				float r_par = (outside_eta*costhetai-material_eta*costhetat)/(outside_eta*costhetai+material_eta*costhetat); //eta2 = materialeta
+				float r_per = (material_eta*costhetai-outside_eta*costhetat)/(material_eta*costhetai+outside_eta*costhetat); 
 				kr = 0.5f*(r_par*r_par+r_per*r_per);
-				kt = 1 - kr; 
+				kt = 1 - kr;
 			}
 		}
 		
@@ -534,11 +573,11 @@ void Scene::photon_trace(Photon photon, int level, int diffuse_level,int specula
 			Photon reflect_photon;
 
 			reflect_photon.photon_ray.direction = I - 2.0f*(I.dot(N))*N;
-			reflect_photon.photon_ray.position.x = hit.position.x + 0.0001*reflect_photon.photon_ray.direction.x;
-			reflect_photon.photon_ray.position.y = hit.position.y + 0.0001*reflect_photon.photon_ray.direction.y;
-			reflect_photon.photon_ray.position.z = hit.position.z + 0.0001*reflect_photon.photon_ray.direction.z;
+			reflect_photon.photon_ray.position.x = hit.position.x + 0.0001*hit.normal.x;
+			reflect_photon.photon_ray.position.y = hit.position.y + 0.0001*hit.normal.y;
+			reflect_photon.photon_ray.position.z = hit.position.z + 0.0001*hit.normal.z;
 			reflect_photon.photon_ray.direction.normalise();
-			reflect_photon.power = photon.power;
+			reflect_photon.power = new_power;
 			photon_trace(reflect_photon,level,diffuse_level,specular_level,caustic);
 	
 		}
@@ -547,11 +586,12 @@ void Scene::photon_trace(Photon photon, int level, int diffuse_level,int specula
 			Colour refract_power;
 			Photon refract_photon;
 			
-			refract_photon.power = photon.power;// photon.power;
-			refract_photon.photon_ray.direction = eta*I-(eta*costhetai-costhetat)*N;
-			refract_photon.photon_ray.position.x = hit.position.x + 0.0001*refract_photon.photon_ray.direction.x;
-			refract_photon.photon_ray.position.y = hit.position.y + 0.0001*refract_photon.photon_ray.direction.y;
-			refract_photon.photon_ray.position.z = hit.position.z + 0.0001*refract_photon.photon_ray.direction.z;
+			refract_photon.power = new_power;// photon.power;
+			refract_photon.photon_ray.direction = eta*I+(eta*costhetai-costhetat)*N;
+			refract_photon.photon_ray.direction.normalise();
+			refract_photon.photon_ray.position.x = hit.position.x - 0.0001*hit.normal.x;
+			refract_photon.photon_ray.position.y = hit.position.y - 0.0001*hit.normal.y;
+			refract_photon.photon_ray.position.z = hit.position.z - 0.0001*hit.normal.z;
 			photon_trace(refract_photon,level,diffuse_level,specular_level,caustic);
 
 		}
@@ -626,6 +666,24 @@ void Scene::photon_raytrace(Ray ray, Vertex eye, Colour &overall_colour, Vertex 
 		return;
 	}
 
+	float outside_eta = 1.0;
+	float material_eta = hit.what->material->index_refrac;
+	hit.normal.normalise();
+	float NdotI = hit.normal.dot(ray.direction);
+	
+	float outside;
+	if(NdotI < 0)
+	{
+		NdotI = - NdotI;
+		outside = 1;
+	}
+	else
+	{
+		outside = -1;
+		hit.normal.negate();
+		std::swap(material_eta,outside_eta);
+	}
+	
 	// we have a hit.
 
 	Ray tolight;
@@ -641,7 +699,23 @@ void Scene::photon_raytrace(Ray ray, Vertex eye, Colour &overall_colour, Vertex 
 	tolight.position.z = hit.position.z + 0.0001*tolight.direction.z;
 	
 	Hit direct_hit;
+	
 	trace(tolight,object_list,direct_hit);
+	float check_dist = direct_hit.t;
+	while(direct_hit.flag == true && direct_hit.what->material->refract !=0.0f ) // if the object we hit is refractive trace until it's not.
+	{
+		tolight.position.x = direct_hit.position.x + 0.0001*tolight.direction.x;
+		tolight.position.y = direct_hit.position.y + 0.0001*tolight.direction.y;
+		tolight.position.z = direct_hit.position.z + 0.0001*tolight.direction.z;
+		
+		trace(tolight,object_list,direct_hit);
+		check_dist += direct_hit.t;
+		if(check_dist > distance)
+		{
+			direct_hit.flag = false;
+			break;
+		}
+	}
 	if(direct_hit.t > distance)
 	{
 		//std::cout << "direct_hit.t: " << direct_hit.t << " distance to light: " << distance << endl; 
@@ -650,94 +724,112 @@ void Scene::photon_raytrace(Ray ray, Vertex eye, Colour &overall_colour, Vertex 
 	Vector V,N,R,L,I;
 	float red,green,blue,RdotV,LdotN;
 	// reflection refraction stuff;
-	float material_eta = hit.what->material->index_refrac;
-	float outside_eta = 1.0f;
-	float NdotI = hit.normal.dot(ray.direction);
 
-
-	if(hit.normal.dot(ray.direction)<0)
-	{
-		NdotI = - NdotI;
-	}
-	else
-	{
-		hit.normal.negate();
-		swap(material_eta,outside_eta);
-	}
 	float eta = outside_eta/material_eta; // so 1/eta = material/outside
+
 	float costhetai = NdotI;
-	float costhetat = sqrt(1.0f-(eta*eta)*(1.0f-pow(costhetai,2)));
-	float k = 1 - eta*eta*(1-costhetai*costhetai);
+	float sinthetat_sq = eta*eta*(1-costhetai*costhetai);
+	float k = 1 - sinthetat_sq;	
+	float costhetat = sqrt(k);	
 	float kr,kt;
 	kr = hit.what->material->reflect;
 	kt = hit.what->material->refract;
-	bool bool_refract = true;
+	
+
 	if(kt != 0) // If kt != 0 then to TIR and fresnel else keep kr the same to allow non-trasparent materials.
 	{
-		if(k<0.0f & bool_refract) // tir if material reflective
+		if(k<0.0f) // tir if material reflective
 		{
+			if(eta < 1)
+			{
+				std::cout << "problemo" << endl;
+			}
 			kt = 0.0f; // no refraction only reflection
-			if(kr!=0.0f) // if material reflective make 100% reflective
-			{
-				kr = 1.0f; 
-				
-			}
-		}
-		else // do fresnel
-		{
-			if(kt!=0)
-			{
-				float r_par = (material_eta*costhetai-outside_eta*costhetat)/(material_eta*costhetai+outside_eta*costhetat); //eta2 = materialeta
-				float r_per = (outside_eta*costhetai-material_eta*costhetat)/(outside_eta*costhetai+material_eta*costhetat); 
-				kr = 0.5f*(r_par*r_par+r_per*r_per);
-				kt = 1 - kr;
-			}
+			kr = 1.0f; 
 			
 		}
+		else // do fresnel NOTE: website scratchpixel has wrong formula for fresnel - :''''(
+		{
+			float r_par = (outside_eta*costhetai-material_eta*costhetat)/(outside_eta*costhetai+material_eta*costhetat); //eta2 = materialeta
+			float r_per = (material_eta*costhetai-outside_eta*costhetat)/(material_eta*costhetai+outside_eta*costhetat); 
+			kr = 0.5f*(r_par*r_par+r_per*r_per);
+			kt = 1 - kr;
+		}
 	}
-
+	
+	L = tolight.direction;
+	
+	
 	V.x = eye.x - hit.position.x;
 	V.y = eye.y - hit.position.y;
 	V.z = eye.z - hit.position.z;
 	V.normalise();
 	N = hit.normal;
-	N.normalise();
+	
 	I = ray.direction;
-
-	Colour diffuse = hit.what->material->diffuse_photon;
-		
-	Colour specular = hit.what->material->specular_photon;
+	I.normalise();
+	R = I-2.0f*(N.dot(I))*N;
+	Vector L_rev = L;
+	L_rev.negate();
+	Vector L_R;
+	L_R = L_rev - 2.0f*(N.dot(L_rev))*N;
+	Colour diffuse = hit.what->material->diffuse;
+	
+	Colour specular = hit.what->material->specular;
 	Colour direct = Colour(0,0,0,0);
-
-	if(direct_hit.flag == false)//  if we have no hit we do direct lighting i.e. raytrace normally with no ambient
+	
+	if(direct_hit.flag == false)//if(direct_hit.flag == false)  if we have no hit we do direct lighting i.e. raytrace normally with no ambient
 	{
+		
 		Vector eye_to_hit = V;
 		eye_to_hit.negate();
 		//std::cout<<"we have direct lighting" << endl;
 		Vector ldir = tolight.direction;
 		ldir.negate();
-		hit.what->material->compute_light_colour(eye_to_hit,N,ldir,direct);
+		
+		//hit.what->material->compute_light_colour(eye_to_hit,N,ldir,direct);
 		// not sure if reflection and refraction should be outside this if statement but will keep inside at the moment.
 		// Basically should you see reflection and refraction in shadow.
-		direct.r = min(direct.r,1.0f);
-		direct.g = min(direct.g,1.0f);
-		direct.b = min(direct.b,1.0f);
+		
+		RdotV = L_R.dot(V);
+		LdotN = L.dot(N);
+		if(LdotN<0) // We are behind an object so no lighting
+		{
+			LdotN = 0;
+			RdotV = 0;
+		}
+		else if(RdotV <= 0) // specular reflection causes problems on refractive objects.
+		{
+			RdotV = 0;
+		}
+		
+		// implementing phong diffuse and specular.
+		direct.r 	= 1*min((diffuse.r*(LdotN) + specular.r*pow(RdotV,20.0f)),1.0f);
+		direct.g 	= 1*min((diffuse.g*(LdotN) + specular.g*pow(RdotV,20.0f)),1.0f);
+		direct.b 	= 1*min((diffuse.b*(LdotN) + specular.b*pow(RdotV,20.0f)),1.0f);
 
+		
+	
+		
 	}
 	Colour global = Colour(0,0,0,0);
-
-	if(kr!=0) // if our material is reflective.
+	
+	if(kr!=0)// if our material is reflective.
 	{
+
 		Colour r_colour;
 		Ray reflect_ray;
-
-		Vector R = I-2.0f*(N.dot(I))*N; 
+		 
 		R.normalise();
+		// The outside part means if we have total internal refraction the ray gets pushed in not out.
 		reflect_ray.position.x = hit.position.x + 0.0001f*N.x;
 		reflect_ray.position.y = hit.position.y + 0.0001f*N.y;
 		reflect_ray.position.z = hit.position.z + 0.0001f*N.z;
 
 		reflect_ray.direction = R;
+		
+	
+
 
 		photon_raytrace(reflect_ray,eye,r_colour,light_pos,level,caustic,caustic_output,direct_output,global_map_output);
 		r_colour.r = kr*r_colour.r;
@@ -746,20 +838,21 @@ void Scene::photon_raytrace(Ray ray, Vertex eye, Colour &overall_colour, Vertex 
 
 		global.add(r_colour); 
 	}
-
-	if(kt!=0) // if our material is refractive
+	Vector T = eta*I + (eta*costhetai - costhetat)*N;
+	T.normalise();
+	if(kt!=0 ) // if our material is refractive
 	{
-		Colour refract_colour;
+		// Next check if we have any total internal refraction happening here
 
-		Vector T;
-		T = eta*I-(eta*costhetai-costhetat)*N;
-		T.normalise();
+
+		Colour refract_colour;
+	
 		Ray refract_ray;
 		refract_ray.direction = T;
 
-		refract_ray.position.x = hit.position.x + 0.0001*T.x;
-		refract_ray.position.y = hit.position.y + 0.0001*T.y;
-		refract_ray.position.z = hit.position.z + 0.0001*T.z; 
+		refract_ray.position.x = hit.position.x - 0.0001*N.x;
+		refract_ray.position.y = hit.position.y - 0.0001*N.y;
+		refract_ray.position.z = hit.position.z - 0.0001*N.z; 
 
 		photon_raytrace(refract_ray,eye,refract_colour,light_pos,level,caustic,direct_output,caustic_output,global_map_output);
 
@@ -769,22 +862,22 @@ void Scene::photon_raytrace(Ray ray, Vertex eye, Colour &overall_colour, Vertex 
 
 		global.add(refract_colour);
 	}
-	global.r = min(global.r,1.0f);
-	global.g = min(global.g,1.0f);
-	global.b = min(global.b,1.0f);
+	global.r = min(global.r,10.0f);
+	global.g = min(global.g,10.0f);
+	global.b = min(global.b,10.0f);
 	
 	const float query_point[3] = {hit.position.x,hit.position.y,hit.position.z};
 	
-	size_t num_closest = 200; // This should be larger I think
+	size_t num_closest = 100; // This should be larger I think
 	std::vector<size_t> out_indices(num_closest);
 	std::vector<float> out_distances_sq(num_closest);
 	
-	num_closest = tree->knnSearch(&query_point[0],num_closest,&out_indices[0],&out_distances_sq[0]);
+	num_closest = tree->knnSearch(query_point,num_closest,&out_indices[0],&out_distances_sq[0]);
 	out_indices.resize(num_closest);
 	out_distances_sq.resize(num_closest); // resizing means we don't search where we shouldn't in the for loop.
-	float radius_sq = *max_element(out_distances_sq.begin(),out_distances_sq.end());
+	float radius_sq = out_distances_sq.back();
 	float circle_area  = M_PI*radius_sq;
-
+	
 	
 	Colour indirect = Colour(0.0f,0.0f,0.0f,0.0f);
 	
@@ -812,17 +905,17 @@ void Scene::photon_raytrace(Ray ray, Vertex eye, Colour &overall_colour, Vertex 
 		V.y = eye.y - y;
 		V.z = eye.z - z;
 		V.normalise();
-		R = incident_direction - 2.0f*(incident_direction.dot(N))*N;
-		R.normalise();
+		Vector R_new = incident_direction - 2.0f*(incident_direction.dot(N))*N;
+		R_new.normalise();
 
 
-		RdotV = max(R.dot(V),0.0f);
+		RdotV = max(R_new.dot(V),0.0f);
 		LdotN = max(L.dot(N),0.0f);
 
 		// implementing phong diffuse and specular.
-		red 	= min(0.5f*(diffuse.r*(LdotN)*photon_power.r + specular.r*pow(RdotV,20.0f)*photon_power.r),1.0f);
-		green 	= min(0.5f*(diffuse.g*(LdotN)*photon_power.g + specular.g*pow(RdotV,20.0f)*photon_power.g),1.0f);
-		blue 	= min(0.5f*(diffuse.b*(LdotN)*photon_power.b + specular.b*pow(RdotV,20.0f)*photon_power.b),1.0f);
+		red 	= (diffuse.r*(LdotN)*photon_power.r + specular.r*pow(RdotV,20.0f)*photon_power.r);
+		green 	= (diffuse.g*(LdotN)*photon_power.g + specular.g*pow(RdotV,20.0f)*photon_power.g);
+		blue 	= (diffuse.b*(LdotN)*photon_power.b + specular.b*pow(RdotV,20.0f)*photon_power.b);
 
 
 		indirect.r += red;
@@ -831,9 +924,10 @@ void Scene::photon_raytrace(Ray ray, Vertex eye, Colour &overall_colour, Vertex 
 		
 
 	}
-	indirect.r = min(indirect.r/circle_area,1.0f);
-	indirect.g = min(indirect.g/circle_area,1.0f);
-	indirect.b = min(indirect.b/circle_area,1.0f);
+	
+	indirect.r = (indirect.r/circle_area);
+	indirect.g = (indirect.g/circle_area);
+	indirect.b = (indirect.b/circle_area);
 	
 	Colour caustic_col = Colour(0,0,0,0);
 	if(caustic) // if we have caustics compute caustic radiance.
@@ -842,77 +936,122 @@ void Scene::photon_raytrace(Ray ray, Vertex eye, Colour &overall_colour, Vertex 
 		red_c = 0;
 		green_c = 0;
 		blue_c = 0;
-		size_t num_closest_c = 20; 
+		size_t num_closest_c = 15; // was 20 
 		std::vector<size_t> out_indices_c(num_closest_c);
 		std::vector<float> out_distances_sq_c(num_closest_c);
 
-		num_closest_c = caustic_tree->knnSearch(&query_point[0],num_closest_c,&out_indices_c[0],&out_distances_sq_c[0]);
-		out_indices_c.resize(num_closest_c);
+		num_closest_c = caustic_tree->knnSearch(query_point,num_closest_c,&out_indices_c[0],&out_distances_sq_c[0]);
 		out_distances_sq_c.resize(num_closest_c);
-		float radius_sq_c = *max_element(out_distances_sq_c.begin(),out_distances_sq_c.end());
+		out_indices_c.resize(num_closest_c);
+	
+		float radius_sq_c = out_distances_sq_c.back();
 		float circle_area_c  = M_PI*radius_sq_c;
 		float k = 1;
-		for(size_t i = 0; i<num_closest_c;i++)
+		Vector R_caustic;
+		if(num_closest_c == 0)
 		{
-			
-			size_t current_index = out_indices_c[i];
-			float x_c = caustic_map.pts[current_index].x;
-			float y_c = caustic_map.pts[current_index].y;
-			float z_c = caustic_map.pts[current_index].z;
-			Vector dir_c = caustic_map.pts[current_index].incident_direction;
-			Colour pow_c = caustic_map.pts[current_index].power;
-			int caustic_map_size = caustic_map.pts.size();
-			float dx = abs(x_c - hit.position.x);
-			float dy = abs(y_c - hit.position.y);
-			float dz = abs(z_c - hit.position.z);
-
-			float dis = sqrt(dx*dx+dy*dy+dz*dz);
-			float wpc = 1 - dis/(k*sqrt(radius_sq_c));
-			L = dir_c;
-			L.negate();
-			L.normalise();
-
-			V.x = eye.x - x_c;
-			V.y = eye.y - y_c;
-			V.z = eye.z - z_c;
-			V.normalise();
-			R = dir_c - 2.0f*(dir_c.dot(N))*N;
-			R.normalise();
-
-			RdotV = max(R.dot(V),0.0f);
-			LdotN = max(L.dot(N),0.0f);
-			// Phong reflection without ambient term.
-			red_c 		= min(0.5f*(wpc*diffuse.r*(LdotN)*pow_c.r + specular.r*pow(RdotV,20.0f)*pow_c.r),1.0f); // caustics do not depend on the object they hit.
-			green_c 	= min(0.5f*(wpc*diffuse.g*(LdotN)*pow_c.g + specular.g*pow(RdotV,20.0f)*pow_c.g),1.0f);
-			blue_c 		= min(0.5f*(wpc*diffuse.b*(LdotN)*pow_c.b + specular.b*pow(RdotV,20.0f)*pow_c.b),1.0f);
-
-
-		
-			// maybe put a max on caustic contribution
-			caustic_col.r += red_c;
-			caustic_col.g += green_c;
-			caustic_col.b += blue_c;
+			caustic_col = Colour(0,0,0,0);
 		}
-		float denom = (1-2/(3*k))*circle_area_c;
-		caustic_col.r = min(caustic_col.r/denom,1.0f);
-		caustic_col.g = min(caustic_col.g/denom,1.0f);
-		caustic_col.b = min(caustic_col.b/denom,1.0f);
+		else
+		{
+			float wpc,dx,dy,dz,x_c,y_c,z_c,dis;
+			Colour pow_c;
+			for(size_t i = 0; i<num_closest_c;i++)
+			{
+				
+				size_t current_index = out_indices_c[i];
+			
+				x_c = caustic_map.pts[current_index].x;
+				y_c = caustic_map.pts[current_index].y;
+				z_c = caustic_map.pts[current_index].z;
+				Vector dir_c = caustic_map.pts[current_index].incident_direction;
+				pow_c = caustic_map.pts[current_index].power;
+				int caustic_map_size = caustic_map.pts.size();
+				dx = abs(x_c - hit.position.x);
+				dy = abs(y_c - hit.position.y);
+				dz = abs(z_c - hit.position.z);
+				
+				dis = sqrt(out_distances_sq_c[i]);
+				
+				wpc = std::max((1 - dis/(k*sqrt(radius_sq_c))),0.0f);
+				L = dir_c;
+				L.negate();
+				L.normalise();
+
+				V.x = eye.x - x_c;
+				V.y = eye.y - y_c;
+				V.z = eye.z - z_c;
+				V.normalise();
+				R_caustic = dir_c - 2.0f*(dir_c.dot(N))*N;
+				R_caustic.normalise();
+
+				RdotV = max(R_caustic.dot(V),0.0f);
+				LdotN = max(L.dot(N),0.0f);
+				// Phong reflection without ambient term.
+				red_c 		= wpc*(diffuse.r*(LdotN)*pow_c.r + specular.r*pow(RdotV,20.0f)*pow_c.r); // caustics do not depend on the object they hit.
+				green_c 	= wpc*(diffuse.g*(LdotN)*pow_c.g + specular.g*pow(RdotV,20.0f)*pow_c.g);
+				blue_c 		= wpc*(diffuse.b*(LdotN)*pow_c.b + specular.b*pow(RdotV,20.0f)*pow_c.b);
+				
+
+			
+				// maybe put a max on caustic contribution
+				caustic_col.r += std::min(red_c,1.0f);
+				caustic_col.g += std::min(green_c,1.0f);
+				caustic_col.b += std::min(blue_c,1.0f);
+			}
+
+		}
+		if(num_closest_c != 0)
+		{
+			float denom = (1-2/(3*k))*circle_area_c;
+			caustic_col.r = (caustic_col.r/denom);
+			caustic_col.g = (caustic_col.g/denom);
+			caustic_col.b = (caustic_col.b/denom);
+		}
+
 
 	}
+	caustic_col.r = min(caustic_col.r,10.0f);
+	caustic_col.g = min(caustic_col.g,10.0f);
+	caustic_col.b = min(caustic_col.b,10.0f);
+
+	caustic_output.r = caustic_col.r;
+	caustic_output.g = caustic_col.g;
+	caustic_output.b = caustic_col.b;
+
+
+	
+	indirect.r = min(indirect.r,10.0f);
+	indirect.g = min(indirect.g, 10.0f);
+	indirect.b = min(indirect.b, 10.0f);
+
+	direct.r = min(direct.r,10.0f);
+	direct.g = min(direct.g,10.0f);
+	direct.b = min(direct.b,10.0f);	
+	
+	global.r = min(global.r,10.0f);
+	global.g = min(global.g,10.0f);
+	global.b = min(global.b,10.0f);
+
 
 	overall_colour.add(direct);
-	overall_colour.add(indirect);
 	overall_colour.add(global);
-	overall_colour.add(caustic_col);
-	overall_colour.r = min(overall_colour.r,20.0f);
-	overall_colour.g = min(overall_colour.g,20.0f); // 20 works well.
-	overall_colour.b = min(overall_colour.b,20.0f); // These are unecessary 
+	overall_colour.add(indirect);	
+ 	overall_colour.add(caustic_col);
+	//overall_colour.r = min(overall_colour.r,1.0f);
+	//overall_colour.g = min(overall_colour.g,1.0f);
+	//overall_colour.b = min(overall_colour.b,1.0f);
+
+	
+	//overall_colour.r = min(overall_colour.r,20.0f);
+	//overall_colour.g = min(overall_colour.g,20.0f); // 20 works well.
+	//overall_colour.b = min(overall_colour.b,20.0f); // These are unecessary 
 
 	
 	
-	caustic_output.r = min(caustic_col.r,20.0f);
-	caustic_output.g = min(caustic_col.g,20.0f);
-	caustic_output.b = min(caustic_col.b,20.0f);
+	
+	
+
 	
 	global_map_output.r = min(indirect.r,20.0f);
 	global_map_output.g = min(indirect.g,20.0f);

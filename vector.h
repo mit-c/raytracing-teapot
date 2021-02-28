@@ -139,7 +139,7 @@ public:
 	  return t;
 	}
 
-        friend Vector operator*(const Vector &a, const Vector &b)
+	friend Vector operator*(const Vector &a, const Vector &b)
 		{
 	  Vector t;
 	  t.x = a.x * b.x;
@@ -148,7 +148,7 @@ public:
 	  return t;
 	}
 
-	        friend Vector operator*(const float a, const Vector &b)
+	friend Vector operator*(const float a, const Vector &b)
 		{
 	  Vector t;
 	  t.x = a * b.x;

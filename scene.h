@@ -88,5 +88,5 @@ public:
     void hemisphere_diffuse(Vector normal,Vector &new_direction);
 	void store_photon(Photon photon,bool caustic);
 	void photon_raytrace(Ray ray, Vertex eye,Colour &out_colour,Vertex light_pos, int level,bool caustic,Colour &caustic_output, Colour &direct_output, Colour &global_map_output);
-	void emit_photon_caustic(Vertex light_location,int num_photons);
+	void emit_photon_caustic(Vertex light_location,int num_photons,float power_ratio);
 };

@@ -18,8 +18,6 @@
 class Phong : public Material {
 public:
 	Colour ambient;
-	Colour diffuse;
-	Colour specular;
 	Colour reflective;
 	float  power;
 
